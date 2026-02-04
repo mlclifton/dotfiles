@@ -8,7 +8,6 @@ set -euo pipefail
 # --- Configuration & Constants ---
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIGS_DIR="$DOTFILES_DIR/configs"
-PACKAGES_DIR="$DOTFILES_DIR/packages"
 LOG_FILE="$DOTFILES_DIR/dot-sync.log"
 
 # --- State Variables ---
@@ -16,7 +15,6 @@ DRY_RUN=false
 NON_INTERACTIVE=false
 COMMAND_INSTALL=false
 COMMAND_ADD=false
-COMMAND_PACKAGES=false
 COMMAND_SYNC=false
 
 # --- UI & Logging ---
@@ -67,7 +65,6 @@ A robust, symlink-based dotfiles management system.
 Options:
   --install     Installs dotfiles (creates symlinks from configs/ to \$HOME).
   --add         Interactively import a new file into the dotfiles repo.
-  --packages    Reinstalls system packages from the package list.
   --sync        Pulls latest changes from GitHub and/or pushes local repo changes.
   --dry-run     Shows what would happen without making any changes.
   -y, --yes     Non-interactive mode (assumes 'yes' to all prompts).
@@ -374,34 +371,6 @@ install_dotfiles() {
     done
 }
 
-restore_packages() {
-    local pkg_list="$PACKAGES_DIR/pacman.list"
-    if [[ ! -f "$pkg_list" ]]; then
-        log_error "Package list not found at $pkg_list"
-        return 1
-    fi
-
-    log_info "Installing packages from $pkg_list..."
-    if confirm "Proceed with package installation?"; then
-        # Assuming Arch Linux as per README
-        run_cmd sudo pacman -S --needed - < "$pkg_list"
-    fi
-}
-
-export_packages() {
-    log_info "Exporting current package list to $PACKAGES_DIR/pacman.list"
-    if [[ ! -d "$PACKAGES_DIR" ]]; then
-        run_cmd mkdir -p "$PACKAGES_DIR"
-    fi
-    
-    if [[ "$DRY_RUN" == "true" ]]; then
-        echo -e "${YELLOW}[DRY-RUN]${NC} pacman -Qqen > $PACKAGES_DIR/pacman.list"
-    else
-        pacman -Qqen > "$PACKAGES_DIR/pacman.list"
-    fi
-    log_success "Packages exported."
-}
-
 sync_git() {
     log_info "Synchronizing with remote repository..."
     
@@ -410,9 +379,6 @@ sync_git() {
 
     log_info "Pulling latest changes..."
     run_cmd git pull --ff-only
-
-    # Update package list before pushing
-    export_packages
 
     log_info "Committing local changes..."
     run_cmd git add -A
@@ -440,7 +406,6 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --install)  COMMAND_INSTALL=true; shift ;;
         --add)      COMMAND_ADD=true; shift ;;
-        --packages) COMMAND_PACKAGES=true; shift ;;
         --sync)     COMMAND_SYNC=true; shift ;;
         --dry-run)  DRY_RUN=true; shift ;;
         -y|--yes)   NON_INTERACTIVE=true; shift ;;
@@ -482,10 +447,6 @@ main() {
 
     if [[ "$COMMAND_INSTALL" == "true" ]]; then
         install_dotfiles
-    fi
-
-    if [[ "$COMMAND_PACKAGES" == "true" ]]; then
-        restore_packages
     fi
 
     if [[ "$COMMAND_SYNC" == "true" ]]; then

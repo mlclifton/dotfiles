@@ -1,6 +1,6 @@
 # Dotfiles Manager
 
-A robust, symlink-based dotfiles management system designed for Omarchy (Arch-based) Linux. This tool allows you to version control your configuration files and restore them (along with your system packages) easily on any machine.
+A robust, symlink-based dotfiles management system designed for Omarchy (Arch-based) Linux. This tool allows you to version control your configuration files and restore them easily on any machine.
 
 ## Purpose
 The primary goal is to provide a safe, idempotent, and reversible way to manage system customizations. By using symbolic links, we ensure that the repository remains the "source of truth" while allowing the system to use the configurations in their standard locations (e.g., `~/.zshrc`).
@@ -8,7 +8,7 @@ The primary goal is to provide a safe, idempotent, and reversible way to manage 
 ## Core Principles
 - **Safety First**: Existing files are backed up (`.bak`) before being replaced by symlinks.
 - **Dry Run Support**: Users can preview all changes before they are applied.
-- **Interactive Mode**: Fine-grained control over which configurations or packages are installed.
+- **Interactive Mode**: Fine-grained control over which configurations are installed.
 - **Secret Management**: Built-in pattern to include sensitive data (API keys, etc.) while keeping them out of Git.
 - **Idempotency**: Running the scripts multiple times is safe and won't create redundant links or backups.
 
@@ -20,8 +20,6 @@ dotfiles/
 │   ├── git/            # Git configuration (.gitconfig)
 │   ├── omarchy/        # Omarchy-specific customizations
 │   └── ...
-├── packages/           # System package lists
-│   └── pacman.list     # List of packages for restoration
 ├── scripts/
 │   └── dot-sync.sh     # The main management script
 ├── tests/              # Test suite
@@ -38,7 +36,6 @@ This is the primary tool for synchronizing your environment. By default, the scr
 **Commands:**
 - `--install [PATH]`: Installs dotfiles (creates symlinks). If `[PATH]` is provided, only files targeting that path are processed.
 - `--add [PATH]`: Interactively selection and import of new files into the repository. If `[PATH]` is provided, the search is restricted to that directory.
-- `--packages`: Reinstalls system packages from the package list.
 - `--sync`: Pulls latest changes from GitHub and/or pushes local repo changes.
 - `--yes` (or `-y`): Non-interactive mode (assumes 'yes' to all prompts).
 - `--dry-run`: Shows what *would* happen without making any changes to the filesystem.
