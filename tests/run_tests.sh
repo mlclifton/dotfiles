@@ -230,7 +230,11 @@ EOF
     chmod +x "$TEST_DIR/bin/git"
 
     # Run with input
-    echo -e "testcat\ny\ny\n" | run_dot_sync --add
+    # 0. 'c' to continue after verification
+    # 1. Category "testcat" (Global)
+    # 2. Confirm link for file1 (y)
+    # 3. Confirm link for file2 (y)
+    echo -e "c\ntestcat\ny\ny\n" | run_dot_sync --add
 
     # Verify
     # 1. Configs exist

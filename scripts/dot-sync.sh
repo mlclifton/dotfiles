@@ -176,7 +176,12 @@ link_file() {
         fi
     elif [[ -e "$target_file" ]]; then
         # File exists but is not a symlink
-        if cmp -s "$target_file" "$repo_file"; then
+        
+        # In DRY_RUN, the repo_file might not exist yet if it was just "added"
+        if [[ "$DRY_RUN" == "true" ]] && [[ ! -e "$repo_file" ]]; then
+            log_info "$rel_path is a new file (dry-run). Converting to symlink..."
+            run_cmd rm "$target_file"
+        elif cmp -s "$target_file" "$repo_file"; then
             log_info "$rel_path matches repo version. Converting to symlink..."
             run_cmd rm "$target_file"
         else
@@ -201,29 +206,45 @@ import_config() {
     fi
 
     local search_root="${TARGET_PATH:-$HOME}"
-    log_info "Searching in: $search_root"
-
     local selected_files=()
     
-    # Construct find command to include dotfiles but exclude noise
-    # We use eval to handle the quoted exclusions correctly
-    local find_cmd="find \"$search_root\" -type f \
-        -not -path '*/.git/*' \
-        -not -path '*/.cache/*' \
-        -not -path '*/.local/share/*' \
-        -not -path '*/.ssh/*' \
-        -not -path \"$DOTFILES_DIR/*\""
+    while true; do
+        log_info "Searching in: $search_root"
 
-    # Select files using fzf --multi
-    if ! mapfile -t selected_files < <(eval "$find_cmd" | fzf --multi --prompt="Select config file(s) to import (Tab to multi-select): "); then
-         log_warn "No file selected."
-         return 0
-    fi
+        # Construct find command to include dotfiles but exclude noise
+        # We use eval to handle the quoted exclusions correctly
+        local find_cmd="find \"$search_root\" -type f \
+            -not -path '*/.git/*' \
+            -not -path '*/.cache/*' \
+            -not -path '*/.local/share/*' \
+            -not -path '*/.ssh/*' \
+            -not -path \"$DOTFILES_DIR/*\""
 
-    if [[ ${#selected_files[@]} -eq 0 ]]; then
-        log_warn "No file selected."
-        return 0
-    fi
+        # Select files using fzf --multi
+        if ! mapfile -t selected_files < <(eval "$find_cmd" | fzf --multi --prompt="Select config file(s) to import (Tab to multi-select): "); then
+             log_warn "No file selected."
+             return 0
+        fi
+
+        if [[ ${#selected_files[@]} -eq 0 ]]; then
+            log_warn "No file selected."
+            return 0
+        fi
+
+        # Verification step
+        echo -e "\n${BLUE}Selected files for import:${NC}"
+        for f in "${selected_files[@]}"; do
+            echo "  - $f"
+        done
+        
+        local choice
+        read -r -p "$(echo -e "\nAction: [C]ontinue, [R]e-select, [Q]uit? ")" choice
+        case "$choice" in
+            [cC]*) break ;;
+            [rR]*) continue ;;
+            *) log_info "Import cancelled."; return 0 ;;
+        esac
+    done
 
     log_info "Selected ${#selected_files[@]} files."
 
@@ -263,10 +284,11 @@ import_config() {
                 if [[ "$use_global_category" == "false" ]]; then category=""; fi
                 continue
             fi
+        else
+            log_info "Adding new file to repository: $rel_path"
         fi
 
         # Copy file to repo
-        log_info "Copying $rel_path to $target_dir..."
         run_cmd mkdir -p "$target_dir"
         run_cmd cp "$selected_file" "$repo_file"
 
