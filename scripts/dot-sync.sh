@@ -249,10 +249,17 @@ import_config() {
 
     # Ask for global category if multiple files are selected
     if [[ ${#selected_files[@]} -gt 1 ]]; then
-        read -r -p "Enter category name for ALL files (leave empty to prompt individually): " global_category
-        if [[ -n "$global_category" ]]; then
-            use_global_category=true
-        fi
+        while true; do
+            read -r -p "Enter category name for ALL files (leave empty to prompt individually): " global_category
+            if [[ -z "$global_category" ]]; then
+                break
+            elif [[ "$global_category" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+                use_global_category=true
+                break
+            else
+                log_error "Category must be alphanumeric (hyphens and underscores allowed)."
+            fi
+        done
     fi
 
     local files_committed=false
@@ -266,6 +273,10 @@ import_config() {
         if [[ "$use_global_category" == "false" ]]; then
             while [[ -z "$category" ]]; do
                 read -r -p "Enter category name for $rel_path (e.g., zsh, git, vim): " category
+                if [[ -n "$category" ]] && [[ ! "$category" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+                    log_error "Category must be alphanumeric (hyphens and underscores allowed)."
+                    category=""
+                fi
             done
         fi
 
