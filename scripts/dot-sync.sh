@@ -301,9 +301,8 @@ import_config() {
 
         # Sync with Git (Commit only)
         log_info "Staging $rel_path..."
-        cd "$DOTFILES_DIR"
-        run_cmd git add "$repo_file"
-        run_cmd git commit -m "Add $rel_path to $category configs"
+        run_cmd git -C "$DOTFILES_DIR" add "$repo_file"
+        run_cmd git -C "$DOTFILES_DIR" commit -m "Add $rel_path to $category configs"
         files_committed=true
 
         # Reset category if we are prompting individually
@@ -383,23 +382,20 @@ install_dotfiles() {
 
 sync_git() {
     log_info "Synchronizing with remote repository..."
-    
-    # Push/Pull from current directory (the repo root)
-    cd "$DOTFILES_DIR"
 
     log_info "Pulling latest changes..."
-    run_cmd git pull --ff-only
+    run_cmd git -C "$DOTFILES_DIR" pull --ff-only
 
     log_info "Committing local changes..."
-    run_cmd git add -A
-    
+    run_cmd git -C "$DOTFILES_DIR" add -A
+
     # Check if there are changes to commit
-    if git diff --cached --quiet; then
+    if git -C "$DOTFILES_DIR" diff --cached --quiet; then
         log_info "No local changes to commit."
     else
-        run_cmd git commit -m "Auto-sync: $(date)"
+        run_cmd git -C "$DOTFILES_DIR" commit -m "Auto-sync: $(date)"
         log_info "Pushing changes..."
-        run_cmd git push
+        run_cmd git -C "$DOTFILES_DIR" push
     fi
 }
 
