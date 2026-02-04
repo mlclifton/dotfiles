@@ -271,7 +271,7 @@ import_config() {
         fi
 
         local target_dir="$CONFIGS_DIR/$category"
-        local repo_file="$target_dir/$(basename "$selected_file")"
+        local repo_file="$target_dir/$rel_path"
         
         # Check if target already exists
         if [[ -e "$repo_file" ]]; then
@@ -286,7 +286,7 @@ import_config() {
         fi
 
         # Copy file to repo
-        run_cmd mkdir -p "$target_dir"
+        run_cmd mkdir -p "$(dirname "$repo_file")"
         run_cmd cp "$selected_file" "$repo_file"
 
         # Sync with Git (Commit only)
