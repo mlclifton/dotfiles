@@ -208,19 +208,18 @@ import_config() {
     while true; do
         log_info "Searching in: $search_root"
 
-        # Construct find command to include dotfiles but exclude noise
-        # We use eval to handle the quoted exclusions correctly
-        local find_cmd="find \"$search_root\" -type f \
-            -not -path '*/.git/*' \
-            -not -path '*/.cache/*' \
-            -not -path '*/.local/share/*' \
-            -not -path '*/.ssh/*' \
-            -not -path \"$DOTFILES_DIR/*\""
-
         # Select files using fzf --multi
-        if ! mapfile -t selected_files < <(eval "$find_cmd" | fzf --multi --prompt="Select config file(s) to import (Tab to multi-select): "); then
-             log_warn "No file selected."
-             return 0
+        if ! mapfile -t selected_files < <(
+            find "$search_root" -type f \
+                -not -path '*/.git/*' \
+                -not -path '*/.cache/*' \
+                -not -path '*/.local/share/*' \
+                -not -path '*/.ssh/*' \
+                -not -path "$DOTFILES_DIR/*" \
+            | fzf --multi --prompt="Select config file(s) to import (Tab to multi-select): "
+        ); then
+            log_warn "No file selected."
+            return 0
         fi
 
         if [[ ${#selected_files[@]} -eq 0 ]]; then
