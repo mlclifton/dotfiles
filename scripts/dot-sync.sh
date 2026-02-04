@@ -299,15 +299,6 @@ import_config() {
         run_cmd git commit -m "Add $rel_path to $category configs"
         files_committed=true
 
-        # Link the file back
-        log_info "Converting original file to symlink..."
-        
-        if confirm "Ready to replace original file with symlink (backup will be created if needed)?"; then
-            link_file "$repo_file" "$rel_path"
-        else
-            log_warn "Skipped symlinking. You can run --install later."
-        fi
-
         # Reset category if we are prompting individually
         if [[ "$use_global_category" == "false" ]]; then
             category=""

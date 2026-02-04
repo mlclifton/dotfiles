@@ -36,7 +36,8 @@ dotfiles/
 This is the primary tool for synchronizing your environment. By default, the script runs in **interactive mode**, prompting for confirmation before each major action.
 
 **Commands:**
-- `--install`: Installs dotfiles (creates symlinks).
+- `--install [PATH]`: Installs dotfiles (creates symlinks). If `[PATH]` is provided, only files targeting that path are processed.
+- `--add [PATH]`: Interactively selection and import of new files into the repository. If `[PATH]` is provided, the search is restricted to that directory.
 - `--packages`: Reinstalls system packages from the package list.
 - `--sync`: Pulls latest changes from GitHub and/or pushes local repo changes.
 - `--yes` (or `-y`): Non-interactive mode (assumes 'yes' to all prompts).
@@ -71,10 +72,11 @@ To guarantee reliability without risking your actual machine, the repository inc
 To handle sensitive information, the system looks for `.secrets` files within config directories. These are sourced by your main configs (e.g., `.zshrc` sources `~/.zsh_secrets`) but are explicitly ignored by `.gitignore` to prevent accidental commits.
 
 ### How to Add a New Config
-1.  Create a category directory in `configs/` if it doesn't exist (e.g., `mkdir configs/vim`).
-2.  Move your configuration file into that directory (e.g., `mv ~/.vimrc configs/vim/`).
-3.  Run `scripts/dot-sync.sh --install` to create the symlink.
-4.  Commit and push your changes: `scripts/dot-sync.sh --sync`.
+1.  Run `scripts/dot-sync.sh --add`.
+2.  Use the interactive picker (`fzf`) to select one or more files (use **Tab** for multi-select).
+3.  Confirm the selection and provide a category (e.g., `zsh`) when prompted.
+4.  Run `scripts/dot-sync.sh --install` to create the symlink for the newly added files.
+5.  (Optional) Push changes to the remote if not already done during `--add`: `scripts/dot-sync.sh --sync`.
 
 ## Troubleshooting
 - **Log File:** Check `dot-sync.log` for detailed execution logs.

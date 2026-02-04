@@ -232,9 +232,7 @@ EOF
     # Run with input
     # 0. 'c' to continue after verification
     # 1. Category "testcat" (Global)
-    # 2. Confirm link for file1 (y)
-    # 3. Confirm link for file2 (y)
-    echo -e "c\ntestcat\ny\ny\n" | run_dot_sync --add
+    echo -e "c\ntestcat\n" | run_dot_sync --add
 
     # Verify
     # 1. Configs exist
@@ -244,11 +242,11 @@ EOF
         log_fail "FAILED: Files not copied to repo."
     fi
 
-    # 2. Symlinks created
-    if [[ -L "$FAKE_HOME/file1" ]] && [[ -L "$FAKE_HOME/file2" ]]; then
-        log_test "SUCCESS: Files symlinked."
+    # 2. Symlinks should NOT be created by --add anymore
+    if [[ ! -L "$FAKE_HOME/file1" ]] && [[ ! -L "$FAKE_HOME/file2" ]]; then
+        log_test "SUCCESS: Files NOT symlinked by --add."
     else
-        log_fail "FAILED: Files not symlinked."
+        log_fail "FAILED: Files were symlinked by --add (should be handled by --install)."
     fi
     
     # 3. Git commits
