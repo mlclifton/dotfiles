@@ -303,8 +303,12 @@ import_config() {
 
     # Push once if any files were committed
     if [[ "$files_committed" == "true" ]]; then
-        log_info "Pushing all changes to remote..."
-        run_cmd git push
+        if git remote get-url origin &>/dev/null; then
+            log_info "Pushing all changes to remote..."
+            run_cmd git push
+        else
+            log_info "No remote configured. Use --sync to push later."
+        fi
     fi
 }
 
