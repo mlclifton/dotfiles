@@ -60,7 +60,7 @@ confirm() {
 
 show_help() {
     cat << EOF
-Usage: $(basename "$0") [OPTIONS]
+Usage: $(basename "$0") [OPTIONS] [PATH]
 
 A robust, symlink-based dotfiles management system.
 
@@ -72,6 +72,9 @@ Options:
   --dry-run     Shows what would happen without making any changes.
   -y, --yes     Non-interactive mode (assumes 'yes' to all prompts).
   --help        Displays this help message.
+
+Arguments:
+  [PATH]        Optional. Restrict operations to a specific directory (e.g., ~/.config).
 
 Default behavior is interactive mode.
 EOF
@@ -197,62 +200,102 @@ import_config() {
         return 1
     fi
 
-    # Select file using fzf (starting from HOME)
-    local selected_file
-    selected_file=$(find "$HOME" -maxdepth 2 -not -path '*/.*' -type f | fzf --prompt="Select config file to import: ")
+    local search_root="${TARGET_PATH:-$HOME}"
+    log_info "Searching in: $search_root"
+
+    local selected_files=()
     
-    if [[ -z "$selected_file" ]]; then
-        # If the first attempt failed or was cancelled, try a broader search including dotfiles
-        selected_file=$(find "$HOME" -maxdepth 2 -type f | fzf --prompt="Select config file to import (including dotfiles): ")
+    # Construct find command to include dotfiles but exclude noise
+    # We use eval to handle the quoted exclusions correctly
+    local find_cmd="find \"$search_root\" -maxdepth 2 -type f \
+        -not -path '*/.git/*' \
+        -not -path '*/.cache/*' \
+        -not -path '*/.local/share/*' \
+        -not -path '*/.ssh/*' \
+        -not -path \"$DOTFILES_DIR/*\""
+
+    # Select files using fzf --multi
+    if ! mapfile -t selected_files < <(eval "$find_cmd" | fzf --multi --prompt="Select config file(s) to import (Tab to multi-select): "); then
+         log_warn "No file selected."
+         return 0
     fi
 
-    if [[ -z "$selected_file" ]]; then
+    if [[ ${#selected_files[@]} -eq 0 ]]; then
         log_warn "No file selected."
         return 0
     fi
 
-    local rel_path="${selected_file#$HOME/}"
-    log_info "Selected: $rel_path"
+    log_info "Selected ${#selected_files[@]} files."
 
-    # Select Category
-    local category
-    read -r -p "Enter category name (e.g., zsh, git, vim): " category
-    if [[ -z "$category" ]]; then
-        log_error "Category cannot be empty."
-        return 1
-    fi
+    local global_category=""
+    local use_global_category=false
 
-    local target_dir="$CONFIGS_DIR/$category"
-    local repo_file="$target_dir/$(basename "$selected_file")"
-    
-    # Check if target already exists
-    if [[ -e "$repo_file" ]]; then
-        log_warn "File already exists in repo: $repo_file"
-        if ! confirm "Overwrite repo version?"; then
-            return 0
+    # Ask for global category if multiple files are selected
+    if [[ ${#selected_files[@]} -gt 1 ]]; then
+        read -r -p "Enter category name for ALL files (leave empty to prompt individually): " global_category
+        if [[ -n "$global_category" ]]; then
+            use_global_category=true
         fi
     fi
 
-    # Copy file to repo
-    log_info "Copying $rel_path to $target_dir..."
-    run_cmd mkdir -p "$target_dir"
-    run_cmd cp "$selected_file" "$repo_file"
-
-    # Sync with Git immediately
-    log_info "Syncing new file to git..."
-    cd "$DOTFILES_DIR"
-    run_cmd git add "$repo_file"
-    run_cmd git commit -m "Add $rel_path to $category configs"
-    run_cmd git push
-
-    # Link the file back
-    log_info "Converting original file to symlink..."
+    local files_committed=false
     
-    # Force manual confirmation for the conversion as per requirement
-    if confirm "Ready to replace original file with symlink (backup will be created if needed)?"; then
-        link_file "$repo_file" "$rel_path"
-    else
-        log_warn "Skipped symlinking. You can run --install later."
+    for selected_file in "${selected_files[@]}"; do
+        # Calculate relative path from HOME for consistency
+        local rel_path="${selected_file#$HOME/}"
+        log_info "Processing: $rel_path"
+
+        local category="$global_category"
+        if [[ "$use_global_category" == "false" ]]; then
+            while [[ -z "$category" ]]; do
+                read -r -p "Enter category name for $rel_path (e.g., zsh, git, vim): " category
+            done
+        fi
+
+        local target_dir="$CONFIGS_DIR/$category"
+        local repo_file="$target_dir/$(basename "$selected_file")"
+        
+        # Check if target already exists
+        if [[ -e "$repo_file" ]]; then
+            log_warn "File already exists in repo: $repo_file"
+            if ! confirm "Overwrite repo version?"; then
+                # Reset category if looping
+                if [[ "$use_global_category" == "false" ]]; then category=""; fi
+                continue
+            fi
+        fi
+
+        # Copy file to repo
+        log_info "Copying $rel_path to $target_dir..."
+        run_cmd mkdir -p "$target_dir"
+        run_cmd cp "$selected_file" "$repo_file"
+
+        # Sync with Git (Commit only)
+        log_info "Staging $rel_path..."
+        cd "$DOTFILES_DIR"
+        run_cmd git add "$repo_file"
+        run_cmd git commit -m "Add $rel_path to $category configs"
+        files_committed=true
+
+        # Link the file back
+        log_info "Converting original file to symlink..."
+        
+        if confirm "Ready to replace original file with symlink (backup will be created if needed)?"; then
+            link_file "$repo_file" "$rel_path"
+        else
+            log_warn "Skipped symlinking. You can run --install later."
+        fi
+
+        # Reset category if we are prompting individually
+        if [[ "$use_global_category" == "false" ]]; then
+            category=""
+        fi
+    done
+
+    # Push once if any files were committed
+    if [[ "$files_committed" == "true" ]]; then
+        log_info "Pushing all changes to remote..."
+        run_cmd git push
     fi
 }
 
@@ -278,16 +321,39 @@ install_dotfiles() {
         return 0
     fi
 
+    # Filter mappings based on TARGET_PATH if specified
+    local filtered_mappings=()
+    if [[ -n "$TARGET_PATH" ]]; then
+        log_info "Restricting installation to: $TARGET_PATH"
+        for mapping in "${mappings[@]}"; do
+            rel_path="${mapping#*:}"
+            local full_target_path="$HOME/$rel_path"
+            
+            # Check if full_target_path starts with TARGET_PATH
+            # We assume paths are normalized enough for simple prefix matching
+            if [[ "$full_target_path" == "$TARGET_PATH"* ]]; then
+                filtered_mappings+=("$mapping")
+            fi
+        done
+    else
+        filtered_mappings=("${mappings[@]}")
+    fi
+
+    if [[ ${#filtered_mappings[@]} -eq 0 ]]; then
+        log_info "No dotfiles match the criteria/path."
+        return 0
+    fi
+
     # Pre-flight Snapshot
     local target_files=()
-    for mapping in "${mappings[@]}"; do
+    for mapping in "${filtered_mappings[@]}"; do
         rel_path="${mapping#*:}"
         target_files+=("$rel_path")
     done
     create_snapshot "${target_files[@]}"
 
     # Process each mapping
-    for mapping in "${mappings[@]}"; do
+    for mapping in "${filtered_mappings[@]}"; do
         local repo_file="${mapping%%:*}"
         local rel_path="${mapping#*:}"
         
@@ -355,6 +421,8 @@ if [[ $# -eq 0 ]]; then
     exit 0
 fi
 
+TARGET_PATH=""
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --install)  COMMAND_INSTALL=true; shift ;;
@@ -364,9 +432,29 @@ while [[ $# -gt 0 ]]; do
         --dry-run)  DRY_RUN=true; shift ;;
         -y|--yes)   NON_INTERACTIVE=true; shift ;;
         --help)     show_help; exit 0 ;;
-        *)          log_error "Unknown option: $1"; show_help; exit 1 ;;
+        -*)         log_error "Unknown option: $1"; show_help; exit 1 ;;
+        *)          
+            if [[ -z "$TARGET_PATH" ]]; then
+                TARGET_PATH="$1"
+                shift
+            else
+                log_error "Multiple paths specified: $TARGET_PATH and $1"
+                show_help
+                exit 1
+            fi
+            ;;
     esac
 done
+
+if [[ -n "$TARGET_PATH" ]]; then
+   if [[ ! -d "$TARGET_PATH" ]]; then
+       log_error "Target path does not exist or is not a directory: $TARGET_PATH"
+       exit 1
+   fi
+   # Resolve absolute path
+   TARGET_PATH=$(cd "$TARGET_PATH" && pwd)
+   log_info "Targeting specific path: $TARGET_PATH"
+fi
 
 # --- Main Logic (Placeholders) ---
 

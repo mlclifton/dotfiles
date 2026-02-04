@@ -136,11 +136,139 @@ test_conflict_keep_local() {
 
 # --- Execution ---
 
+test_path_restricted_install() {
+    reset_env
+    log_test "Running Path Restricted Install test..."
+
+    # Setup: 
+    # 1. Config outside restriction
+    mkdir -p "$FAKE_REPO/configs/zsh"
+    echo "export TEST=1" > "$FAKE_REPO/configs/zsh/.zshrc"
+    
+    # 2. Config inside restriction (e.g. .config/nvim)
+    # Mapping: configs/nvim/.config/nvim/init.vim -> ~/.config/nvim/init.vim
+    mkdir -p "$FAKE_REPO/configs/nvim/.config/nvim"
+    echo "set number" > "$FAKE_REPO/configs/nvim/.config/nvim/init.vim"
+    
+    # Ensure target directory exists (as required by the script argument validation)
+    mkdir -p "$FAKE_HOME/.config"
+
+    # Run install restricted to ~/.config
+    run_dot_sync --install --yes "$FAKE_HOME/.config"
+
+    # Verify:
+    # .zshrc should NOT be linked
+    if [[ -L "$FAKE_HOME/.zshrc" ]]; then
+        log_fail "FAILED: .zshrc should NOT be linked when restriction is active."
+    else
+        # Ensure it wasn't created at all
+        if [[ -e "$FAKE_HOME/.zshrc" ]]; then
+             log_fail "FAILED: .zshrc shouldn't exist."
+        fi
+    fi
+
+    # init.vim SHOULD be linked
+    if [[ -L "$FAKE_HOME/.config/nvim/init.vim" ]] && [[ "$(readlink "$FAKE_HOME/.config/nvim/init.vim")" == "$FAKE_REPO/configs/nvim/.config/nvim/init.vim" ]]; then
+        log_test "SUCCESS: Restricted install only processed target path."
+    else
+        log_fail "FAILED: init.vim not linked correctly."
+    fi
+}
+
+test_multi_file_import() {
+    reset_env
+    log_test "Running Multi-File Import test..."
+    
+    # Setup Fake FZF
+    mkdir -p "$TEST_DIR/bin"
+    cat << 'EOF' > "$TEST_DIR/bin/fzf"
+#!/bin/bash
+# Mock fzf to return pre-defined files
+if [[ -f "$MOCK_FZF_FILE" ]]; then
+    cat "$MOCK_FZF_FILE"
+fi
+EOF
+    chmod +x "$TEST_DIR/bin/fzf"
+    export PATH="$TEST_DIR/bin:$PATH"
+    export MOCK_FZF_FILE="$TEST_DIR/fzf_selection.txt"
+
+    # Create files to import
+    echo "content1" > "$FAKE_HOME/file1"
+    echo "content2" > "$FAKE_HOME/file2"
+
+    # Set selection
+    echo "$FAKE_HOME/file1" > "$MOCK_FZF_FILE"
+    echo "$FAKE_HOME/file2" >> "$MOCK_FZF_FILE"
+
+    # Setup git in fake repo (needed for git operations in import_config)
+    (cd "$FAKE_REPO" && git init && git config user.email "test@example.com" && git config user.name "Test User")
+
+    # Run dot-sync --add
+    # Input: 
+    # 1. Category "testcat" (Global)
+    # 2. Confirm link for file1 (y)
+    # 3. Confirm link for file2 (y)
+    # Note: git push will fail because there is no remote, but that's okay, run_cmd allows failure? 
+    # Wait, set -e is on. git push failure might crash script.
+    # run_cmd executes command. If git push fails, script exits.
+    # We should mock git or ensure it doesn't fail.
+    # Or just let it fail but catch it?
+    # Actually, run_cmd checks exit status? No, it just runs it. set -e catches it.
+    
+    # Let's mock git too? Or add a remote.
+    # Simpler: Mock git to exit 0.
+    cat << 'EOF' > "$TEST_DIR/bin/git"
+#!/bin/bash
+# Mock git
+if [[ "$1" == "push" ]]; then
+    echo "Mock git push"
+    exit 0
+else
+    /usr/bin/git "$@"
+fi
+EOF
+    chmod +x "$TEST_DIR/bin/git"
+
+    # Run with input
+    echo -e "testcat\ny\ny\n" | run_dot_sync --add
+
+    # Verify
+    # 1. Configs exist
+    if [[ -f "$FAKE_REPO/configs/testcat/file1" ]] && [[ -f "$FAKE_REPO/configs/testcat/file2" ]]; then
+        log_test "SUCCESS: Files copied to repo."
+    else
+        log_fail "FAILED: Files not copied to repo."
+    fi
+
+    # 2. Symlinks created
+    if [[ -L "$FAKE_HOME/file1" ]] && [[ -L "$FAKE_HOME/file2" ]]; then
+        log_test "SUCCESS: Files symlinked."
+    else
+        log_fail "FAILED: Files not symlinked."
+    fi
+    
+    # 3. Git commits
+    # We used real git for add/commit (via our wrapper which calls /usr/bin/git for non-push)
+    # Check log
+    local commit_count
+    commit_count=$(cd "$FAKE_REPO" && /usr/bin/git log --oneline | grep "Add file" | wc -l)
+    # Actually message is "Add <rel_path> to <category> configs"
+    commit_count=$(cd "$FAKE_REPO" && /usr/bin/git log --oneline | grep "Add .* to testcat configs" | wc -l)
+    
+    if [[ "$commit_count" -eq 2 ]]; then
+        log_test "SUCCESS: Two commits created."
+    else
+        log_fail "FAILED: Expected 2 commits, found $commit_count."
+    fi
+}
+
 test_fresh_install
 test_backup_existing
 test_conflict_keep_local
 test_dry_run
 test_idempotency
+test_path_restricted_install
+test_multi_file_import
 
 echo -e "
 ${GREEN}ALL TESTS PASSED${NC}"
