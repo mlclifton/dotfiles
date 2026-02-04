@@ -387,7 +387,7 @@ sync_git() {
     run_cmd git -C "$DOTFILES_DIR" pull --ff-only
 
     log_info "Committing local changes..."
-    run_cmd git -C "$DOTFILES_DIR" add -A
+    run_cmd git -C "$DOTFILES_DIR" add configs/
 
     # Check if there are changes to commit
     if git -C "$DOTFILES_DIR" diff --cached --quiet; then
