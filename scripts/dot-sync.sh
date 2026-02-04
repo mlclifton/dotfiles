@@ -447,6 +447,9 @@ fi
 # --- Main Logic (Placeholders) ---
 
 main() {
+    # Set up signal handling for clean interruption
+    trap 'log_warn "Interrupted. Restore from snapshot in ~/.dotfiles_backup_*.tar.gz if needed."' INT TERM
+
     if [[ "$DRY_RUN" == "true" ]]; then
         log_info "Running in DRY RUN mode. No changes will be made."
     fi
