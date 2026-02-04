@@ -19,7 +19,7 @@ This feature enhances the `dot-sync.sh` script to support multi-file selection, 
 
 #### A. File Selection & Path Restriction
 - **Search Root**: Defaults to `$HOME`, but can be overridden by an optional CLI path argument (e.g., `scripts/dot-sync.sh --add ~/.config/nvim`).
-- **Discovery**: `find "$SEARCH_ROOT" -maxdepth 2 -type f` refined to:
+- **Discovery**: `find "$SEARCH_ROOT" -type f` refined to:
     - Include dotfiles (e.g., `.zshrc`).
     - Exclude noisy or sensitive directories (e.g., `.git/`, `.cache/`, `.local/`, `.ssh/`).
 - **Interaction**: `fzf --multi --prompt="Select file(s) to import (Tab to multi-select): "`.

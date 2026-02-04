@@ -18,7 +18,7 @@ These notes summarize the planned changes for the `dot-sync.sh` script to suppor
 ### 2. Enhanced `import_config`
 - **Discovery**: Update `find` to include dotfiles but exclude noise:
   ```bash
-  find "${SEARCH_ROOT:-$HOME}" -maxdepth 2 -type f 
+  find "${SEARCH_ROOT:-$HOME}" -type f 
       -not -path '*/.git/*' 
       -not -path '*/.cache/*' 
       -not -path '*/.local/share/*'

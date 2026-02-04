@@ -207,7 +207,7 @@ import_config() {
     
     # Construct find command to include dotfiles but exclude noise
     # We use eval to handle the quoted exclusions correctly
-    local find_cmd="find \"$search_root\" -maxdepth 2 -type f \
+    local find_cmd="find \"$search_root\" -type f \
         -not -path '*/.git/*' \
         -not -path '*/.cache/*' \
         -not -path '*/.local/share/*' \
