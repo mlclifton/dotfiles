@@ -1,5 +1,8 @@
 # Dotfiles Manager
 
+> **⚠️ AI-Generated Code Notice**
+> This project was developed with the assistance of AI coding assistants (Gemini CLI and Claude Code). While efforts have been made to ensure quality and correctness, this code is provided **AS-IS without warranty of any kind**. Please review and test thoroughly before use, especially in production environments.
+
 A robust, symlink-based dotfiles management system designed for Omarchy (Arch-based) Linux. This tool allows you to version control your configuration files and restore them easily on any machine.
 
 ## Purpose
