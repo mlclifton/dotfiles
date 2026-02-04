@@ -104,12 +104,62 @@ test_dry_run() {
 test_idempotency() {
     reset_env
     log_test "Running Idempotency test..."
-    
-    # Run twice
+
+    # Setup: Create configs in repo
+    mkdir -p "$FAKE_REPO/configs/zsh"
+    echo "export TEST_VAR=1" > "$FAKE_REPO/configs/zsh/.zshrc"
+    mkdir -p "$FAKE_REPO/configs/git"
+    echo "[user]" > "$FAKE_REPO/configs/git/.gitconfig"
+
+    # First run
     run_dot_sync --install --yes
+
+    # Verify first run created symlinks correctly
+    if [[ -L "$FAKE_HOME/.zshrc" ]] && [[ "$(readlink "$FAKE_HOME/.zshrc")" == "$FAKE_REPO/configs/zsh/.zshrc" ]]; then
+        : # Success - symlink exists and points correctly
+    else
+        log_fail "FAILED: First run didn't create correct symlink for .zshrc."
+    fi
+
+    # Note: First run with no existing files creates no snapshot (expected behavior)
+
+    # Wait a second to ensure different timestamp for second snapshot
+    sleep 1
+
+    # Second run
     run_dot_sync --install --yes
-    
+
+    # Verify symlinks still point correctly after second run
+    if [[ -L "$FAKE_HOME/.zshrc" ]] && [[ "$(readlink "$FAKE_HOME/.zshrc")" == "$FAKE_REPO/configs/zsh/.zshrc" ]]; then
+        : # Success - .zshrc symlink still correct
+    else
+        log_fail "FAILED: Second run broke the .zshrc symlink."
+    fi
+
+    if [[ -L "$FAKE_HOME/.gitconfig" ]] && [[ "$(readlink "$FAKE_HOME/.gitconfig")" == "$FAKE_REPO/configs/git/.gitconfig" ]]; then
+        : # Success - .gitconfig symlink still correct
+    else
+        log_fail "FAILED: Second run broke the .gitconfig symlink."
+    fi
+
+    # Verify no .bak files were created (since symlinks were already correct)
+    local bak_count
+    bak_count=$(find "$FAKE_HOME" -name "*.bak" 2>/dev/null | wc -l)
+    if [[ "$bak_count" -ne 0 ]]; then
+        log_fail "FAILED: Second run created unnecessary .bak files."
+    fi
+
+    # Verify snapshot created on second run (when files already exist)
+    local snapshot_count
+    snapshot_count=$(ls -1 "$FAKE_HOME"/.dotfiles_backup_*.tar.gz 2>/dev/null | wc -l)
+    if [[ "$snapshot_count" -lt 1 ]]; then
+        log_fail "FAILED: Expected at least 1 snapshot from second run, found $snapshot_count."
+    fi
+
     log_test "SUCCESS: Run twice without errors."
+    log_test "SUCCESS: Symlinks remain correct after second run."
+    log_test "SUCCESS: No unnecessary .bak files created."
+    log_test "SUCCESS: Snapshot created on second run."
 }
 
 test_conflict_keep_local() {
