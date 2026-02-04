@@ -147,7 +147,8 @@ link_file() {
     local repo_file="$1"
     local rel_path="$2"
     local target_file="$HOME/$rel_path"
-    local target_dir="$(dirname "$target_file")"
+    local target_dir
+    target_dir="$(dirname "$target_file")"
 
     log_info "Processing $rel_path..."
 
