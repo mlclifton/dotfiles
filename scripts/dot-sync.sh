@@ -314,63 +314,59 @@ import_config() {
 
 install_dotfiles() {
     log_info "Scanning $CONFIGS_DIR for dotfiles..."
-    
-    # Collect all files and determine their mappings
-    local mappings=()
+
+    # Collect all files using parallel arrays
+    local repo_files=()
+    local rel_paths=()
     # configs/<category>/<relative_path> -> $HOME/<relative_path>
-    
+
     # Use find to get all files in configs/
     # We want to skip the <category> directory level
     while IFS= read -r -d '' category_dir; do
         category=$(basename "$category_dir")
         while IFS= read -r -d '' repo_file; do
             rel_path="${repo_file#$category_dir/}"
-            mappings+=("$repo_file:$rel_path")
+            repo_files+=("$repo_file")
+            rel_paths+=("$rel_path")
         done < <(find "$category_dir" -type f -print0)
     done < <(find "$CONFIGS_DIR" -mindepth 1 -maxdepth 1 -type d -print0)
 
-    if [[ ${#mappings[@]} -eq 0 ]]; then
+    if [[ ${#repo_files[@]} -eq 0 ]]; then
         log_warn "No dotfiles found in $CONFIGS_DIR."
         return 0
     fi
 
-    # Filter mappings based on TARGET_PATH if specified
-    local filtered_mappings=()
+    # Filter based on TARGET_PATH if specified
+    local filtered_repo_files=()
+    local filtered_rel_paths=()
     if [[ -n "$TARGET_PATH" ]]; then
         log_info "Restricting installation to: $TARGET_PATH"
-        for mapping in "${mappings[@]}"; do
-            rel_path="${mapping#*:}"
-            local full_target_path="$HOME/$rel_path"
-            
+        for i in "${!repo_files[@]}"; do
+            local full_target_path="$HOME/${rel_paths[$i]}"
+
             # Check if full_target_path starts with TARGET_PATH
             # We assume paths are normalized enough for simple prefix matching
             if [[ "$full_target_path" == "$TARGET_PATH"* ]]; then
-                filtered_mappings+=("$mapping")
+                filtered_repo_files+=("${repo_files[$i]}")
+                filtered_rel_paths+=("${rel_paths[$i]}")
             fi
         done
     else
-        filtered_mappings=("${mappings[@]}")
+        filtered_repo_files=("${repo_files[@]}")
+        filtered_rel_paths=("${rel_paths[@]}")
     fi
 
-    if [[ ${#filtered_mappings[@]} -eq 0 ]]; then
+    if [[ ${#filtered_repo_files[@]} -eq 0 ]]; then
         log_info "No dotfiles match the criteria/path."
         return 0
     fi
 
     # Pre-flight Snapshot
-    local target_files=()
-    for mapping in "${filtered_mappings[@]}"; do
-        rel_path="${mapping#*:}"
-        target_files+=("$rel_path")
-    done
-    create_snapshot "${target_files[@]}"
+    create_snapshot "${filtered_rel_paths[@]}"
 
-    # Process each mapping
-    for mapping in "${filtered_mappings[@]}"; do
-        local repo_file="${mapping%%:*}"
-        local rel_path="${mapping#*:}"
-        
-        link_file "$repo_file" "$rel_path"
+    # Process each file
+    for i in "${!filtered_repo_files[@]}"; do
+        link_file "${filtered_repo_files[$i]}" "${filtered_rel_paths[$i]}"
     done
 }
 
