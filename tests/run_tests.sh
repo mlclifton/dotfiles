@@ -264,13 +264,64 @@ EOF
     fi
 }
 
-test_fresh_install
-test_backup_existing
-test_conflict_keep_local
-test_dry_run
-test_idempotency
-test_path_restricted_install
-test_multi_file_import
+TESTS=(
+    test_fresh_install
+    test_backup_existing
+    test_conflict_keep_local
+    test_dry_run
+    test_idempotency
+    test_path_restricted_install
+    test_multi_file_import
+)
 
-echo -e "
-${GREEN}ALL TESTS PASSED${NC}"
+declare -A TEST_SPECS
+TEST_SPECS[test_fresh_install]="Fresh install should create symlinks for repo configs that don't exist in HOME."
+TEST_SPECS[test_backup_existing]="Installing should backup existing HOME files before replacing them with symlinks."
+TEST_SPECS[test_conflict_keep_local]="Installing with 'keep' should update the repository with the local file content."
+TEST_SPECS[test_dry_run]="Dry run should report intended changes without modifying the filesystem."
+TEST_SPECS[test_idempotency]="Running install multiple times should be safe and produce the same result."
+TEST_SPECS[test_path_restricted_install]="Restricted install should only process files within the specified target path."
+TEST_SPECS[test_multi_file_import]="Importing multiple files should copy them to the repo and create individual commits."
+
+declare -A TEST_DESCS
+TEST_DESCS[test_fresh_install]="Creates a dummy config in a fake repo and runs 'dot-sync --install'. Verifies the symlink is created in a fake HOME."
+TEST_DESCS[test_backup_existing]="Creates a file in fake HOME, runs 'dot-sync --install' in overwrite mode. Verifies a .bak file is created."
+TEST_DESCS[test_conflict_keep_local]="Creates different versions of a file in HOME and repo, runs 'dot-sync' in keep mode. Verifies repo content matches HOME."
+TEST_DESCS[test_dry_run]="Runs 'dot-sync --dry-run' and verifies that no files are actually created or modified in the fake HOME."
+TEST_DESCS[test_idempotency]="Runs the install command twice in succession to ensure it doesn't crash or create redundant backups/links."
+TEST_DESCS[test_path_restricted_install]="Sets up files in multiple directories but runs install targeting only one. Verifies others are ignored."
+TEST_DESCS[test_multi_file_import]="Mocks fzf/git to simulate selecting multiple files for import. Verifies files move to repo and git log shows commits."
+
+INTERACTIVE=false
+if [[ "${1:-}" == "-i" ]] || [[ "${1:-}" == "--interactive" ]]; then
+    INTERACTIVE=true
+fi
+
+echo -e "\n${GREEN}Starting Test Suite...${NC}"
+
+for i in "${!TESTS[@]}"; do
+    test_name="${TESTS[$i]}"
+    
+    echo -e "\n======================================================================"
+    echo -e "${GREEN}TEST $((i+1))/${#TESTS[@]}: ${test_name}${NC}"
+    echo -e "SPEC: ${TEST_SPECS[$test_name]}"
+    echo -e "HOW:  ${TEST_DESCS[$test_name]}"
+    echo -e "======================================================================\n"
+
+    $test_name
+
+    if [[ "$INTERACTIVE" == "true" ]]; then
+        echo -e "\n${GREEN}Test '${test_name}' passed.${NC}"
+        
+        # If not the last test, ask to continue
+        if [[ $i -lt $((${#TESTS[@]} - 1)) ]]; then
+            read -p "Press Enter to proceed to the next test (or 'q' to quit): " choice
+            if [[ "$choice" == "q" ]]; then
+                echo -e "\n${RED}Test suite terminated by user.${NC}"
+                exit 0
+            fi
+        fi
+    fi
+done
+
+echo -e "\n${GREEN}ALL TESTS PASSED${NC}"
